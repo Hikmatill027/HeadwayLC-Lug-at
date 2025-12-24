@@ -1,9 +1,15 @@
 services:
     - type: web
       name: youtube-audio-bot
+      runtime: python
       env: python
+      region: oregon
+      plan: free
+      branch: main
       buildCommand: "pip install -r requirements.txt"
       startCommand: "python bot.py"
       envVars:
           - key: BOT_TOKEN
             sync: false
+          - key: PYTHON_VERSION
+            value: 3.13.1

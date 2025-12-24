@@ -9,10 +9,12 @@ A simple Telegram bot that converts YouTube videos to audio files (MP3 format at
 -   ✅ Auto-splits large files into parts under 45MB
 -   ✅ Progress updates during conversion
 -   ✅ Simple and user-friendly
+-   ✅ **Works with Python 3.13+ (latest version)**
+-   ✅ **No pydub dependency** - uses ffmpeg directly for better performance
 
 ## Requirements
 
--   Python 3.9+
+-   Python 3.13+
 -   FFmpeg (for audio conversion)
 -   Telegram Bot Token (from [@BotFather](https://t.me/botfather))
 
@@ -22,7 +24,9 @@ A simple Telegram bot that converts YouTube videos to audio files (MP3 format at
 youtube_audio_bot/
 ├── bot.py              # Main bot code
 ├── requirements.txt    # Python dependencies
+├── runtime.txt         # Python version specification
 ├── render.yaml         # Render.com configuration
+├── apt-packages        # System packages (ffmpeg)
 ├── .gitignore         # Git ignore file
 └── README.md          # This file
 ```

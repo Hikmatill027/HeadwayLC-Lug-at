@@ -3,7 +3,7 @@ import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 import yt_dlp
-from pydub import AudioSegment
+import subprocess
 import asyncio
 from pathlib import Path
 
@@ -90,35 +90,69 @@ def download_audio(url: str, output_path: str) -> str:
     return f"{output_path}.mp3"
 
 
+def get_audio_duration(file_path: str) -> float:
+    """Get audio duration in seconds using ffprobe."""
+    try:
+        cmd = [
+            'ffprobe',
+            '-v', 'error',
+            '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1',
+            file_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        return float(result.stdout.strip())
+    except Exception as e:
+        logger.error(f"Error getting duration: {e}")
+        return 0
+
+
 def split_audio(file_path: str, max_size: int) -> list:
-    """Split audio file into parts if it exceeds max_size."""
+    """Split audio file into parts if it exceeds max_size using ffmpeg."""
     file_size = os.path.getsize(file_path)
     
     if file_size <= max_size:
         return [file_path]
     
-    # Load audio file
-    audio = AudioSegment.from_mp3(file_path)
-    duration_ms = len(audio)
+    # Get audio duration
+    duration = get_audio_duration(file_path)
+    if duration == 0:
+        return [file_path]
     
-    # Calculate number of parts needed
+    # Calculate number of parts needed based on file size
     num_parts = (file_size // max_size) + 1
-    part_duration = duration_ms // num_parts
+    part_duration = duration / num_parts
     
     parts = []
     base_name = file_path.rsplit('.', 1)[0]
     
     for i in range(num_parts):
-        start = i * part_duration
-        end = start + part_duration if i < num_parts - 1 else duration_ms
-        
-        part_audio = audio[start:end]
+        start_time = i * part_duration
         part_path = f"{base_name}_part{i+1}.mp3"
-        part_audio.export(part_path, format='mp3', bitrate='192k')
-        parts.append(part_path)
+        
+        # Use ffmpeg to split the audio
+        cmd = [
+            'ffmpeg',
+            '-i', file_path,
+            '-ss', str(start_time),
+            '-t', str(part_duration),
+            '-acodec', 'libmp3lame',
+            '-b:a', '192k',
+            '-y',  # Overwrite output file
+            part_path
+        ]
+        
+        try:
+            subprocess.run(cmd, capture_output=True, check=True)
+            parts.append(part_path)
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Error splitting audio: {e}")
+            # If splitting fails, return original file
+            return [file_path]
     
-    # Remove original file
-    os.remove(file_path)
+    # Remove original file after successful split
+    if len(parts) > 1:
+        os.remove(file_path)
     
     return parts
 
@@ -196,7 +230,7 @@ async def process_youtube_url(update: Update, context: ContextTypes.DEFAULT_TYPE
                             caption=caption,
                             title=video_info['title'],
                             performer=video_info['channel'],
-                            duration=video_info['duration'] // len(audio_parts) if len(audio_parts) > 1 else video_info['duration']
+                            duration=int(video_info['duration'] / len(audio_parts)) if len(audio_parts) > 1 else video_info['duration']
                         )
                 else:
                     await update.message.reply_audio(
@@ -204,7 +238,7 @@ async def process_youtube_url(update: Update, context: ContextTypes.DEFAULT_TYPE
                         caption=caption,
                         title=video_info['title'],
                         performer=video_info['channel'],
-                        duration=video_info['duration'] // len(audio_parts) if len(audio_parts) > 1 else video_info['duration']
+                        duration=int(video_info['duration'] / len(audio_parts)) if len(audio_parts) > 1 else video_info['duration']
                     )
             
             # Clean up part file
